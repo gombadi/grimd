@@ -16,7 +16,7 @@ import (
 var BuildVersion = "1.0.7"
 
 // ConfigVersion returns the version of grimd, this should be incremented every time the config changes so grimd presents a warning
-var ConfigVersion = "1.0.8"
+var ConfigVersion = "1.0.9"
 
 // Config holds the configuration parameters
 type Config struct {
@@ -42,7 +42,7 @@ type Config struct {
 	ToggleName        string
 	ReactivationDelay uint
 	APIDebug          bool
-	DoH               string
+	DoHs              []string
 	UseDrbl           int
 	DrblPeersFilename string
 	DrblBlockWeight   int64

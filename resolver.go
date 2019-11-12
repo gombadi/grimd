@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -32,13 +29,15 @@ type Resolver struct {
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possbile (have an answer).
 // It returns an error if no request has succeeded.
-func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, nameServers []string, DoH string) (message *dns.Msg, err error) {
-	logger.Debugf("Lookup %s, timeout: %d, interval: %d, nameservers: %v, Using DoH: %v", net, timeout, interval, nameServers, DoH != "")
+func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, nameServers []string, DoHs []string) (message *dns.Msg, err error) {
+	//logger.Debugf("Lookup %s, timeout: %d, interval: %d, nameservers: %v, Using DoH: %v", net, timeout, interval, nameServers, DoH != "")
+	logger.Debugf("Lookup %s, timeout: %d, interval: %d, nameservers: %v, Using DoH: true", net, timeout, interval, nameServers)
 
 	//Is DoH enabled
-	if DoH != "" {
+	if x := len(DoHs); x > 0 {
 		//First try and use DOH. Privacy First
-		ans, err := r.DoHLookup(DoH, timeout, req)
+		logger.Debugf("DoH Lookup: host: %s\n", DoHs[1])
+		ans, err := r.DoHLookup(DoHs[1], timeout, req)
 		if err == nil {
 			//No error so result is ok
 			return ans, nil
