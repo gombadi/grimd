@@ -16,7 +16,7 @@ import (
 var BuildVersion = "1.0.7"
 
 // ConfigVersion returns the version of grimd, this should be incremented every time the config changes so grimd presents a warning
-var ConfigVersion = "1.0.8"
+var ConfigVersion = "1.0.9"
 
 // Config holds the configuration parameters
 type Config struct {
@@ -42,7 +42,8 @@ type Config struct {
 	ToggleName        string
 	ReactivationDelay uint
 	APIDebug          bool
-	DoH               string
+	DoHs              []string
+	DNSFallback       bool
 	UseDrbl           int
 	DrblPeersFilename string
 	DrblBlockWeight   int64
@@ -142,7 +143,13 @@ togglename = ""
 reactivationdelay = 300
 
 #Dns over HTTPS provider to use.
-DoH = "https://cloudflare-dns.com/dns-query"
+dohservers = [
+	"https://cloudflare-dns.com/dns-query",
+	"https://dns.google/dns-query"
+]
+
+# If DoH query fails fall back to regular DNS query
+dnsfallback = true
 `
 
 // WallClock is the wall clock
