@@ -43,6 +43,7 @@ type Config struct {
 	ReactivationDelay uint
 	APIDebug          bool
 	DoHs              []string
+	DNSFallback       bool
 	UseDrbl           int
 	DrblPeersFilename string
 	DrblBlockWeight   int64
@@ -142,7 +143,13 @@ togglename = ""
 reactivationdelay = 300
 
 #Dns over HTTPS provider to use.
-DoH = "https://cloudflare-dns.com/dns-query"
+dohservers = [
+	"https://cloudflare-dns.com/dns-query",
+	"https://dns.google/dns-query"
+]
+
+# If DoH query fails fall back to regular DNS query
+dnsfallback = true
 `
 
 // WallClock is the wall clock

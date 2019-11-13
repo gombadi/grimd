@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
@@ -29,24 +32,11 @@ type Resolver struct {
 // Lookup will ask each nameserver in top-to-bottom fashion, starting a new request
 // in every second, and return as early as possbile (have an answer).
 // It returns an error if no request has succeeded.
-func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, nameServers []string, DoHs []string) (message *dns.Msg, err error) {
-	//logger.Debugf("Lookup %s, timeout: %d, interval: %d, nameservers: %v, Using DoH: %v", net, timeout, interval, nameServers, DoH != "")
-	logger.Debugf("Lookup %s, timeout: %d, interval: %d, nameservers: %v, Using DoH: true", net, timeout, interval, nameServers)
+func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, nameServers []string, dohs []string, dnsFallback bool) (message *dns.Msg, err error) {
 
-	//Is DoH enabled
-	if x := len(DoHs); x > 0 {
-		//First try and use DOH. Privacy First
-		logger.Debugf("DoH Lookup: host: %s\n", DoHs[1])
-		ans, err := r.DoHLookup(DoHs[1], timeout, req)
-		if err == nil {
-			//No error so result is ok
-			return ans, nil
-		}
-
-		//For some reason the DoH lookup failed so fall back to nameservers
-		logger.Debugf("DoH Failed due to '%s' falling back to nameservers", err)
-
-	}
+	res := make(chan *dns.Msg, 1)
+	var wg sync.WaitGroup
+	qname := req.Question[0].Name
 
 	c := &dns.Client{
 		Net:          net,
@@ -54,10 +44,25 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, n
 		WriteTimeout: r.Timeout(timeout),
 	}
 
-	qname := req.Question[0].Name
+	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
+	defer ticker.Stop()
 
-	res := make(chan *dns.Msg, 1)
-	var wg sync.WaitGroup
+	// func to complete a DoH lookup
+	D := func(dohURL string) {
+		defer wg.Done()
+		r, err := r.DoHLookup(dohURL, timeout, req)
+		if err != nil {
+			logger.Errorf("DoH lookup error. Host: %s Error: %v", dohURL, err.Error())
+			return // exit the goroutine without returning result
+		}
+		// non blocking select. If we can't send on the channel then select default and exit goroutine
+		select {
+		case res <- r:
+		default:
+		}
+	}
+
+	// func to complete a DNS lookup
 	L := func(nameserver string) {
 		defer wg.Done()
 		r, _, err := c.Exchange(req, nameserver)
@@ -74,17 +79,49 @@ func (r *Resolver) Lookup(net string, req *dns.Msg, timeout int, interval int, n
 		} else {
 			logger.Debugf("%s resolv on %s (%s)\n", UnFqdn(qname), nameserver, net)
 		}
+		// non blocking select. If we can't send on the channel then select default and exit goroutine
 		select {
 		case res <- r:
 		default:
 		}
 	}
 
-	ticker := time.NewTicker(time.Duration(interval) * time.Millisecond)
-	defer ticker.Stop()
+	//Is DoH enabled
+	if x := len(dohs); x > 0 {
+		//First try and use DOH. Privacy First
+
+		// Start lookup on each nameserver top-down, in every second
+		for _, doh := range dohs {
+			logger.Debugf("DoH lookup to host: %s for query: %s", doh, qname)
+			wg.Add(1)
+			go D(doh)
+			// Block until we have an answer or timeout
+			select {
+			case r := <-res:
+				return r, nil
+			case <-ticker.C:
+				// no answer so ask other upstreams
+				continue
+			}
+		}
+
+		// wait for all the DoH requests to finish
+		wg.Wait()
+		// non blocking select. If no answer is awaiting then select default and fallback or fail
+		select {
+		case r := <-res:
+			return r, nil
+		default:
+			if !dnsFallback {
+				logger.Debugf("DoH lookup failed and not falling back to DNS nameservers")
+				return nil, ResolvError{qname, net, dohs}
+			}
+		}
+	}
 
 	// Start lookup on each nameserver top-down, in every second
 	for _, nameServer := range nameServers {
+		logger.Debugf("DNS lookup to host: %s for query: %s", nameServer, qname)
 		wg.Add(1)
 		go L(nameServer)
 		// but exit early, if we have an answer
