@@ -15,9 +15,6 @@ import (
 )
 
 var (
-	configPath      string
-	forceUpdate     bool
-	grimdActive     bool
 	grimdActivation *ActivationHandler
 	drblPeers       *drblpeer.DrblPeers
 )
@@ -58,6 +55,11 @@ func reloadBlockCache(config *Config,
 }
 
 func main() {
+	var configPath string
+	var forceUpdate bool
+
+	flag.StringVar(&configPath, "config", "grimd.toml", "location of the config file, if not found it will be generated (default grimd.toml)")
+	flag.BoolVar(&forceUpdate, "update", false, "force an update of the blocklist database")
 	flag.Parse()
 
 	config, err := LoadConfig(configPath)
@@ -73,7 +75,6 @@ func main() {
 		loggingState.cleanUp()
 	}()
 
-	grimdActive = true
 	quitActivation := make(chan bool)
 	actChannel := make(chan *ActivationHandler)
 
@@ -135,8 +136,5 @@ forever:
 }
 
 func init() {
-	flag.StringVar(&configPath, "config", "grimd.toml", "location of the config file, if not found it will be generated (default grimd.toml)")
-	flag.BoolVar(&forceUpdate, "update", false, "force an update of the blocklist database")
-
 	runtime.GOMAXPROCS(runtime.NumCPU())
 }
