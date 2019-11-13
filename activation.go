@@ -20,6 +20,8 @@ type ActivationHandler struct {
 func startActivation(actChannel chan *ActivationHandler, quit chan bool, reactivationDelay uint) {
 	var reactivate time.Time
 	var reactivatePending bool
+	grimdActive := true
+
 	a := &ActivationHandler{}
 
 	a.queryChannel = make(chan bool)
